@@ -5,6 +5,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/simse/hermes/cmd"
+	"github.com/simse/hermes/internal/assets"
+
 	"github.com/urfave/cli/v2"
 )
 
@@ -16,7 +19,17 @@ func main() {
 			fmt.Println("boom! I say!")
 			return nil
 		},
+		Commands: []*cli.Command{
+			{
+				Name:   "init",
+				Usage:  "Creates a hermes stack",
+				Action: cmd.InitCommand,
+			},
+		},
 	}
+
+	// Set up assets box
+	assets.InitBox()
 
 	err := app.Run(os.Args)
 	if err != nil {

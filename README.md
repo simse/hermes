@@ -25,6 +25,6 @@ Lists all hermes setups within AWS account.
 Verifies a hermes setup by checking all resources are healthy
 
 
-## `hermes deploy`
+### `hermes deploy`
 
 Deploys a folder to a hermes setup

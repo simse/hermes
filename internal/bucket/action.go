@@ -9,14 +9,14 @@ func init() {
 	createBucketAction := action.Action{
 		Name:            "bucket:create",
 		ProgressMessage: "Creating bucket...",
-		FinishedMessage: "Created bucket.",
+		FinishedMessage: "Created bucket",
 		Handler:         CreateBucketAction,
 	}
 
 	addOAIAction := action.Action{
 		Name:            "bucket:add_oai",
 		ProgressMessage: "Adding Origin Access Identity to bucket...",
-		FinishedMessage: "Added Origin Access Identity to bucket.",
+		FinishedMessage: "Added Origin Access Identity to bucket",
 		Handler:         AddOriginAccessIdentityAction,
 	}
 
@@ -51,16 +51,18 @@ func CreateBucketAction(input action.Input) action.Output {
 func AddOriginAccessIdentityAction(input action.Input) action.Output {
 	addOAIErr := AddOAIPermissions(
 		input.Payload["bucket:name"].(string),
-		input.Payload["oai:canonical_user"].(string),
+		input.Environment["oai:canonical_user"].(string),
 	)
 
 	if addOAIErr != nil {
 		return action.Output{
-			Status: action.ERROR,
+			Status:      action.ERROR,
+			Environment: input.Environment,
 		}
 	}
 
 	return action.Output{
-		Status: action.OK,
+		Status:      action.OK,
+		Environment: input.Environment,
 	}
 }

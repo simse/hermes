@@ -1,7 +1,6 @@
 package cdn
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -60,7 +59,7 @@ func CreateOAI(comment string) (*cloudfront.OriginAccessIdentity, error) {
 }
 
 // CreateDistribution will create a CloudFront distribution
-func CreateDistribution(comment, bucket, OAI, priceClass string, aliasDomains []string, lambdas map[string]string) error {
+func CreateDistribution(comment, bucket, OAI, priceClass string, aliasDomains []string, lambdas map[string]string) (*cloudfront.Distribution, error) {
 	s3OriginConfig := cloudfront.S3OriginConfig{
 		OriginAccessIdentity: aws.String("origin-access-identity/cloudfront/" + OAI),
 	}
@@ -154,7 +153,7 @@ func CreateDistribution(comment, bucket, OAI, priceClass string, aliasDomains []
 		panic(err)
 	}
 
-	fmt.Println(createDistributionOutput)
+	//fmt.Println(createDistributionOutput)
 
-	return nil
+	return createDistributionOutput.Distribution, nil
 }

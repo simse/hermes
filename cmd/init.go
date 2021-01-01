@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/simse/hermes/internal/about"
 	"github.com/simse/hermes/internal/action"
 	"github.com/simse/hermes/internal/constants"
+	"github.com/simse/hermes/internal/deploy"
 
 	"github.com/simse/hermes/internal/cdn"
 	"github.com/simse/hermes/internal/console"
@@ -48,31 +50,6 @@ func InitCommand(c *cli.Context) error {
 
 	awsConnectionSpinner.PersistWith(console.Check, " Connection to AWS successful\n")
 
-	//role, _ := edge.CreateExecutionRole("test")
-
-	//fmt.Println(role)
-
-	//time.Sleep(time.Second * 5)
-
-	//edge.CreateLambdaFunction("test", "arn:aws:iam::616657489041:role/test", "nodejs12.x", "hermesOriginRequest.zip")
-
-	// time.Sleep(time.Second * 5)
-
-	//handler, _ := edge.PublishLambdaFunction("test")
-
-	// bucket.Create("simons-big-test", "us-east-1", false)
-	// identity, _ := cdn.CreateOAI("hermes")
-	// bucket.AddOAIPermissions("simons-big-test", *identity.S3CanonicalUserId)
-
-	//associations := make(map[string]string)
-	//associations["origin-request"] = *handler.FunctionArn
-
-	//cdn.CreateDistribution("novelhardware.com", "novelhardware.com", *identity.Id, "PriceClass_All", []string{"novelhardware.com"}, associations)
-
-	//fmt.Println(deploy.ScanDir("./assets/default-site"))
-
-	// return nil
-
 	actionList := action.List{
 		Actions:     []action.Input{},
 		Environment: map[string]interface{}{},
@@ -88,6 +65,8 @@ func InitCommand(c *cli.Context) error {
 		fmt.Print("\n")
 		return nil
 	}
+
+	actionList.Environment["domain"] = domain
 
 	// Check certificate
 	domainCheckSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Checking certificate status for domain...")
@@ -229,6 +208,36 @@ func InitCommand(c *cli.Context) error {
 		"bucket:public": actionSheet.BucketPublic,
 	})
 
+	actionList.Add("oai:create", map[string]interface{}{
+		"oai:comment": "Origin Access Identity for " + actionSheet.BucketName,
+	})
+
+	actionList.Add("bucket:add_oai", map[string]interface{}{
+		"bucket:name": actionSheet.BucketName,
+	})
+
+	actionList.Add("execution_role:create", map[string]interface{}{
+		"execution_role:name": "hermes",
+	})
+
+	actionList.Add("edge_function:create", map[string]interface{}{
+		"lambda:name":      "hermesOriginRequest",
+		"lambda:runtime":   "nodejs12.x",
+		"lambda:func_path": "hermesOriginRequest.zip",
+		"lambda:event":     "origin-request",
+	})
+
+	actionList.Add("edge_function:create", map[string]interface{}{
+		"lambda:name":      "hermesOriginResponse",
+		"lambda:runtime":   "nodejs12.x",
+		"lambda:func_path": "hermesOriginResponse.zip",
+		"lambda:event":     "origin-response",
+	})
+
+	actionList.Add("cdn:create", map[string]interface{}{
+		"cdn:comment": domain,
+	})
+
 	// Ask about OAI
 	actionSheet.NewOriginAccessIdentity = true
 	// TODO: Offer to use existing OAI
@@ -286,30 +295,19 @@ func InitCommand(c *cli.Context) error {
 	actionList.RunAll()
 	//fmt.Println(actionList.Environment)
 
-	// Create bucket
-	// createBucketSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Creating bucket...")
-	// createBucketSpinner.Start()
+	fmt.Print("\n\nYou can access your new website at: https://" + actionList.Environment["cdn:domain"].(string) + "\n")
 
-	// err = bucket.Create(actionSheet.BucketName, actionSheet.BucketRegion, actionSheet.BucketPublic)
-	// if err != nil {
-	// 	panic(err)
-	// }
+	manifest := deploy.Manifest{
+		InitVersion:   about.Version,
+		DeployVersion: about.Version,
+		Domain:        domain,
+		CloudFront:    actionList.Environment["cdn:arn"].(string),
+		Bucket:        actionSheet.BucketName,
+	}
 
-	// createBucketSpinner.PersistWith(console.Check, " Created bucket")
+	fmt.Println(manifest)
 
-	// Create OAI (if neccesary)
-	// Deploy lambda functions
-	// Create CloudFront distribution
-	// Create default deploy
-	// Inform about domain changes
-
-	// manifest := deploy.Manifest{
-	// 	InitVersion:   about.Version,
-	// 	DeployVersion: about.Version,
-	// 	Domain:        domain,
-	// }
-
-	// fmt.Println(manifest)
+	deploy.WriteManifest(actionSheet.BucketName, manifest)
 
 	return nil
 }

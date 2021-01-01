@@ -2,7 +2,6 @@ package bucket
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"strings"
 
@@ -123,12 +122,12 @@ func AddOAIPermissions(bucket, canonicalUser string) error {
 		Policy: aws.String(string(policy)),
 	}
 
-	putBucketPolicyOutput, err := S3.PutBucketPolicy(&putBucketPolicyInput)
+	_, err := S3.PutBucketPolicy(&putBucketPolicyInput)
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(putBucketPolicyOutput)
+	//fmt.Println(putBucketPolicyOutput)
 
 	return nil
 }

@@ -1,10 +1,10 @@
 package edge
 
 import (
-	"fmt"
 	"io/ioutil"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/iam"
 	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/markbates/pkger"
@@ -44,8 +44,8 @@ func CreateLambdaFunction(name, role, runtime, path string) error {
 		Tags:         tags,
 	}
 
-	createFunctionOutput, createFunctionErr := Lambda.CreateFunction(&createFunctionInput)
-	fmt.Println(createFunctionOutput)
+	_, createFunctionErr := Lambda.CreateFunction(&createFunctionInput)
+	//fmt.Println(createFunctionOutput)
 
 	if createFunctionErr != nil {
 		panic(createFunctionErr)
@@ -81,6 +81,22 @@ func PublishLambdaFunction(name string) (*lambda.FunctionConfiguration, error) {
 func CreateExecutionRole(name string) (string, error) {
 	svc := iam.New(session.Session)
 
+	// Check if theres an existing hermes role
+	getRoleInput := iam.GetRoleInput{
+		RoleName: aws.String(name),
+	}
+
+	role, err := svc.GetRole(&getRoleInput)
+	if err != nil {
+		aerr := err.(awserr.Error)
+
+		if aerr.Code() != iam.ErrCodeNoSuchEntityException {
+			panic(err)
+		}
+	} else {
+		return *role.Role.Arn, nil
+	}
+
 	policyFile, openError := pkger.Open("/assets/lambda/rolePolicyDocument.json")
 	if openError != nil {
 		panic(openError)
@@ -112,10 +128,6 @@ func CreateExecutionRole(name string) (string, error) {
 	_, attachRoleErr := svc.AttachRolePolicy(&attachRolePolicyInput)
 	if attachRoleErr != nil {
 		panic(err)
-	}
-
-	getRoleInput := iam.GetRoleInput{
-		RoleName: aws.String(name),
 	}
 
 	svc.WaitUntilRoleExists(&getRoleInput)

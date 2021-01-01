@@ -45,9 +45,9 @@ func (l *List) RunAll() []Output {
 		l.Environment = actionOutput.Environment
 
 		if actionOutput.Status == OK {
-			actionSpinner.PersistWith(console.Check, " "+action.FinishedMessage+"\n")
+			actionSpinner.PersistWith(console.Check, " "+action.FinishedMessage+"")
 		} else {
-			actionSpinner.PersistWith(console.Cross, " "+action.ErrorMessage+"\n")
+			actionSpinner.PersistWith(console.Cross, " "+action.ErrorMessage+"")
 		}
 	}
 

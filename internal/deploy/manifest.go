@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/s3"
@@ -45,6 +46,8 @@ type EdgeHandler struct {
 func ScanDir(path string) ([]File, error) {
 	var files []File
 
+	root := path
+
 	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
 		if info.IsDir() {
 			return nil
@@ -63,7 +66,7 @@ func ScanDir(path string) ([]File, error) {
 		}
 
 		file := File{
-			Key:      info.Name(),
+			Key:      strings.TrimPrefix(path, root),
 			Size:     info.Size(),
 			Checksum: hex.EncodeToString(hash.Sum(nil)),
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/simse/hermes/internal/action"
 	"github.com/simse/hermes/internal/constants"
 
 	"github.com/simse/hermes/internal/cdn"
@@ -72,6 +73,11 @@ func InitCommand(c *cli.Context) error {
 
 	// return nil
 
+	actionList := action.List{
+		Actions:     []action.Input{},
+		Environment: map[string]interface{}{},
+	}
+
 	// Ask for domain
 	domain := ""
 	domainPrompt := &survey.Input{
@@ -126,21 +132,21 @@ func InitCommand(c *cli.Context) error {
 	// Inquire about S3 bucket
 	console.WhiteUnderline.Println("\n\nS3 bucket")
 	fmt.Println("hermes requires an S3 bucket to store your website and its own config")
-	fmt.Println("\nYou can use an existing bucket or create a new one.")
+	/*fmt.Println("\nYou can use an existing bucket or create a new one.")
 
 	useExistingBucket := false
 	existingBucketPrompt := &survey.Confirm{
 		Message: "Would you like to use an existing bucket?",
 	}
-	survey.AskOne(existingBucketPrompt, &useExistingBucket)
+	survey.AskOne(existingBucketPrompt, &useExistingBucket)*/
 
 	// Connect to S3
 	bucket.InitS3()
 
-	if useExistingBucket {
+	/*if useExistingBucket {
 		fmt.Println("This hasn't been implemented yet, sorry")
 		return nil
-	}
+	}*/
 
 	bucketExists, bucketExistsReason := bucket.Exists(domain)
 
@@ -209,13 +215,19 @@ func InitCommand(c *cli.Context) error {
 		session.InitSecondarySession(actionSheet.BucketRegion)
 	}
 
-	fmt.Println("")
+	/*fmt.Println("")
 
 	bucketPublicPrompt := &survey.Confirm{
 		Message: "Would you like to make the bucket public?",
 		Help:    "It's recommended to say no, so your files are only available through your domains.",
 	}
-	survey.AskOne(bucketPublicPrompt, &actionSheet.BucketPublic)
+	survey.AskOne(bucketPublicPrompt, &actionSheet.BucketPublic)*/
+
+	actionList.Add("bucket:create", map[string]interface{}{
+		"bucket:name":   actionSheet.BucketName,
+		"bucket:region": actionSheet.BucketRegion,
+		"bucket:public": actionSheet.BucketPublic,
+	})
 
 	// Ask about OAI
 	actionSheet.NewOriginAccessIdentity = true
@@ -269,6 +281,10 @@ func InitCommand(c *cli.Context) error {
 	}
 
 	// Do action sheet
+	// fmt.Println(actionList.Actions)
+	//fmt.Println(actionList.Environment)
+	actionList.RunAll()
+	//fmt.Println(actionList.Environment)
 
 	// Create bucket
 	// createBucketSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Creating bucket...")

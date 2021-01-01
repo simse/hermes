@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/simse/hermes/cmd"
-	"github.com/simse/hermes/internal/assets"
 
 	"github.com/urfave/cli/v2"
 )
@@ -27,9 +26,6 @@ func main() {
 			},
 		},
 	}
-
-	// Set up assets box
-	assets.InitBox()
 
 	err := app.Run(os.Args)
 	if err != nil {

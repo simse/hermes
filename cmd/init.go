@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/simse/hermes/internal/constants"
+
 	"github.com/simse/hermes/internal/cdn"
 	"github.com/simse/hermes/internal/console"
 	"github.com/simse/hermes/internal/edge"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/gernest/wow"
 	"github.com/gernest/wow/spin"
 	"github.com/simse/hermes/internal/bucket"
@@ -40,15 +43,45 @@ func InitCommand(c *cli.Context) error {
 	certificate.InitACM()
 	cdn.InitCloudFront()
 	edge.InitLambda()
+	bucket.InitS3()
 
-	awsConnectionSpinner.PersistWith(spin.Spinner{Frames: []string{"✓"}}, " Connection to AWS successful\n")
+	awsConnectionSpinner.PersistWith(console.Check, " Connection to AWS successful\n")
+
+	//role, _ := edge.CreateExecutionRole("test")
+
+	//fmt.Println(role)
+
+	//time.Sleep(time.Second * 5)
+
+	//edge.CreateLambdaFunction("test", "arn:aws:iam::616657489041:role/test", "nodejs12.x", "hermesOriginRequest.zip")
+
+	// time.Sleep(time.Second * 5)
+
+	//handler, _ := edge.PublishLambdaFunction("test")
+
+	// bucket.Create("simons-big-test", "us-east-1", false)
+	// identity, _ := cdn.CreateOAI("hermes")
+	// bucket.AddOAIPermissions("simons-big-test", *identity.S3CanonicalUserId)
+
+	//associations := make(map[string]string)
+	//associations["origin-request"] = *handler.FunctionArn
+
+	//cdn.CreateDistribution("novelhardware.com", "novelhardware.com", *identity.Id, "PriceClass_All", []string{"novelhardware.com"}, associations)
+
+	//fmt.Println(deploy.ScanDir("./assets/default-site"))
+
+	// return nil
 
 	// Ask for domain
 	domain := ""
 	domainPrompt := &survey.Input{
 		Message: "Which domain would you like to use?",
 	}
-	survey.AskOne(domainPrompt, &domain)
+	err := survey.AskOne(domainPrompt, &domain)
+	if err == terminal.InterruptErr {
+		fmt.Print("\n")
+		return nil
+	}
 
 	// Check certificate
 	domainCheckSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Checking certificate status for domain...")
@@ -60,9 +93,9 @@ func InitCommand(c *cli.Context) error {
 	}
 
 	if certificateCheck {
-		domainCheckSpinner.PersistWith(spin.Spinner{Frames: []string{"✓"}}, " Domain has certificate")
+		domainCheckSpinner.PersistWith(console.Check, " Domain has certificate")
 	} else {
-		domainCheckSpinner.PersistWith(spin.Spinner{Frames: []string{"X"}}, " Domain does not have certificate :(")
+		domainCheckSpinner.PersistWith(console.Cross, " Domain does not have certificate :(")
 
 		fmt.Print("\nLet's fix it\n")
 
@@ -74,12 +107,12 @@ func InitCommand(c *cli.Context) error {
 	cfConflictSpinner.Start()
 
 	if cdn.CheckConflictCNAME(domain) {
-		cfConflictSpinner.PersistWith(spin.Spinner{Frames: []string{"X"}}, " There's a CloudFront distribution using this domain. Please remove it before proceeding.")
+		cfConflictSpinner.PersistWith(console.Cross, " There's a CloudFront distribution using this domain. Please remove it before proceeding.")
 
 		return nil
 	}
 
-	cfConflictSpinner.PersistWith(spin.Spinner{Frames: []string{"✓"}}, " No conflicting CloudFront distributions")
+	cfConflictSpinner.PersistWith(console.Check, " No conflicting CloudFront distributions")
 
 	/*
 		// Inquire about CloudFront distribution
@@ -113,27 +146,48 @@ func InitCommand(c *cli.Context) error {
 
 	// Check for bucket conflict
 	if bucketExists {
+		shouldPickNewName := false
+
+		// Bucket exists but is owner by another user
 		if bucketExistsReason == bucket.ErrBucketExistsForeign {
-			fmt.Println("\nA bucket with the name: , already exists.")
+			fmt.Println("\nA bucket with the name:" + domain + ", already exists.\n")
+
+			shouldPickNewName = true
+
+			// Bucket exists, and is owned by current user
+		} else {
+			fmt.Println("This bucket already exists in your account")
+			fmt.Print("\n")
 
 			overwriteBucketPrompt := &survey.Confirm{
 				Message: "Would you like to overwrite the bucket?",
 			}
 			survey.AskOne(overwriteBucketPrompt, &actionSheet.DeleteBucket)
 
-			if actionSheet.DeleteBucket {
-				actionSheet.BucketName = domain
+			if !actionSheet.DeleteBucket {
+				shouldPickNewName = true
+				fmt.Print("\n")
 			} else {
-				// alternativeBucketName := ""
-				alternativeBucketNamePrompt := &survey.Select{
-					Message: "Please pick another bucket name: ",
-					Options: []string{"hello", "hello2"},
-				}
-
-				survey.AskOne(alternativeBucketNamePrompt, &actionSheet.BucketName)
+				fmt.Println("cool")
 			}
-		} else {
-			fmt.Println("This bucket is owned by you, please delete it and try again.")
+		}
+
+		// Pick alternative bucket name
+		if shouldPickNewName {
+			// Generate alternative bucket names
+			alternativeNamesSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Generating alternative names...")
+			alternativeNamesSpinner.Start()
+
+			alternativeNames := bucket.GenerateAlternativeNames(domain)
+			alternativeNamesSpinner.PersistWith(console.Check, " Generated alternative bucket names")
+
+			// alternativeBucketName := ""
+			alternativeBucketNamePrompt := &survey.Select{
+				Message: "Please pick another bucket name: ",
+				Options: alternativeNames,
+			}
+
+			survey.AskOne(alternativeBucketNamePrompt, &actionSheet.BucketName)
 		}
 
 	} else {
@@ -144,50 +198,32 @@ func InitCommand(c *cli.Context) error {
 
 	// Ask about region
 	// alternativeBucketName := ""
-	alternativeBucketNamePrompt := &survey.Select{
+	bucketRegion := &survey.Select{
 		Message: "Please pick a bucket region: ",
-		Options: []string{
-			"us-east-1",
-			"us-east-2",
-			"us-west-1",
-			"us-west-2",
-			"af-south-1",
-			"ap-east-1",
-			"ap-south-1",
-			"ap-northeast-2",
-			"ap-southeast-1",
-			"ap-northeast-1",
-			"ap-southeast-2",
-			"ca-central-1",
-			"eu-central-1",
-			"eu-west-1",
-			"eu-west-2",
-			"eu-south-1",
-			"eu-west-3",
-			"eu-north-1",
-			"me-south-1",
-			"sa-east-1",
-		},
-		Help: "Pick region closest to YOU or the primary deploy server",
+		Options: constants.AWSRegionsList,
+		Help:    "Pick region closest to YOU or the primary deploy server",
 	}
-	survey.AskOne(alternativeBucketNamePrompt, &actionSheet.BucketRegion)
+	survey.AskOne(bucketRegion, &actionSheet.BucketRegion)
+
+	if actionSheet.BucketRegion != "us-east-1" {
+		session.InitSecondarySession(actionSheet.BucketRegion)
+	}
 
 	fmt.Println("")
 
 	bucketPublicPrompt := &survey.Confirm{
 		Message: "Would you like to make the bucket public?",
-		Help:    "By default all files will only be accesible through your domain (CloudFront)",
+		Help:    "It's recommended to say no, so your files are only available through your domains.",
 	}
 	survey.AskOne(bucketPublicPrompt, &actionSheet.BucketPublic)
 
-	// fmt.Println(actionSheet)
-
 	// Ask about OAI
 	actionSheet.NewOriginAccessIdentity = true
+	// TODO: Offer to use existing OAI
 
 	// Confirm action sheet
 	console.WhiteUnderline.Print("\n\nConfirm setup")
-	fmt.Println("\nhermes has not yet created any resouces. Before continuing please verify that all details are correct.")
+	fmt.Println("\nBefore continuing please verify that all details are correct.")
 	fmt.Print("\n")
 
 	console.ShowLegend()
@@ -220,15 +256,44 @@ func InitCommand(c *cli.Context) error {
 	confirmActionSheet := false
 	confirmActionSheetPrompt := &survey.Confirm{
 		Message: "Shall we proceed?",
+		Help:    "Press Ctrl+C to cancel and no changes will be made.",
 	}
-	survey.AskOne(confirmActionSheetPrompt, &confirmActionSheet)
+	err = survey.AskOne(confirmActionSheetPrompt, &confirmActionSheet)
+	if err == terminal.InterruptErr {
+		fmt.Print("\n")
+		return nil
+	}
+
+	if !confirmActionSheet {
+		return nil
+	}
+
+	// Do action sheet
 
 	// Create bucket
+	// createBucketSpinner := wow.New(os.Stdout, spin.Get(spin.Dots), " Creating bucket...")
+	// createBucketSpinner.Start()
+
+	// err = bucket.Create(actionSheet.BucketName, actionSheet.BucketRegion, actionSheet.BucketPublic)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// createBucketSpinner.PersistWith(console.Check, " Created bucket")
+
 	// Create OAI (if neccesary)
 	// Deploy lambda functions
 	// Create CloudFront distribution
 	// Create default deploy
 	// Inform about domain changes
+
+	// manifest := deploy.Manifest{
+	// 	InitVersion:   about.Version,
+	// 	DeployVersion: about.Version,
+	// 	Domain:        domain,
+	// }
+
+	// fmt.Println(manifest)
 
 	return nil
 }
